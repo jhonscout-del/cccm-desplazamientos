@@ -1,17 +1,31 @@
+import { InteractionRequiredAuthError } from '@azure/msal-browser'
+import { msalInstance, msalReady, API_SCOPES } from './msal'
+
 const API_URL = import.meta.env.VITE_API_URL || '/api'
 
-function getToken() {
+async function getToken() {
+  await msalReady
+  const account = msalInstance.getActiveAccount() || msalInstance.getAllAccounts()[0]
+  if (!account) return null
+
   try {
-    return JSON.parse(localStorage.getItem('cccm_auth'))?.token ?? null
-  } catch {
-    return null
+    const result = await msalInstance.acquireTokenSilent({ scopes: API_SCOPES, account })
+    return result.accessToken
+  } catch (err) {
+    // Solo forzar un login interactivo si Microsoft realmente lo exige
+    // (p.ej. la sesión expiró). Si el error es simplemente estar sin señal,
+    // se debe dejar que la app siga funcionando offline.
+    if (err instanceof InteractionRequiredAuthError) {
+      await msalInstance.acquireTokenRedirect({ scopes: API_SCOPES, account })
+    }
+    throw err
   }
 }
 
 async function request(path, { method = 'GET', body, auth = true } = {}) {
   const headers = { 'Content-Type': 'application/json' }
   if (auth) {
-    const token = getToken()
+    const token = await getToken()
     if (token) headers.Authorization = `Bearer ${token}`
   }
 
@@ -27,8 +41,6 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
 }
 
 export const api = {
-  register: (payload) => request('/auth/register', { method: 'POST', body: payload, auth: false }),
-  login: (payload) => request('/auth/login', { method: 'POST', body: payload, auth: false }),
   me: () => request('/auth/me'),
 
   crearViaje: (viaje) => request('/viajes', { method: 'POST', body: viaje }),

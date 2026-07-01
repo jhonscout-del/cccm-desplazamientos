@@ -4,7 +4,6 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { Layout } from './components/Layout'
 import { SyncEngine } from './components/SyncEngine'
 import { Login } from './pages/Login'
-import { Registro } from './pages/Registro'
 import { Home } from './pages/Home'
 import { NuevoViaje } from './pages/NuevoViaje'
 import { ViajeDetalle } from './pages/ViajeDetalle'
@@ -23,7 +22,6 @@ function App() {
         <Layout>
           <Routes>
             <Route path="/login" element={<Login />} />
-            <Route path="/registro" element={<Registro />} />
             <Route path="/" element={<ProtectedRoute><Inicio /></ProtectedRoute>} />
             <Route
               path="/mis-viajes"

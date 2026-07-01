@@ -1,9 +1,17 @@
 import { Router } from 'express'
 import { db } from '../db.js'
 import { requireAuth } from '../auth.js'
+import { upsertViajeEnSharePoint, agregarTrayectoEnSharePoint } from '../graph.js'
 
 export const viajesRouter = Router()
 viajesRouter.use(requireAuth)
+
+// Reflejar en SharePoint es "mejor esfuerzo": SQLite sigue siendo la fuente
+// de verdad para la lógica de la app (quién puede cerrar qué, offline, etc.),
+// así que un fallo de Graph no debe romper la respuesta al usuario.
+function espejoSharePoint(promesa) {
+  promesa.catch((err) => console.error('[SharePoint] fallo al sincronizar:', err.message))
+}
 
 const VIAJE_FIELDS = [
   'nombre_reporta', 'fecha_viaje', 'fecha_reporte', 'jefe_inmediato', 'area',
@@ -37,6 +45,7 @@ viajesRouter.post('/', (req, res) => {
   ).run(id, req.user.id, ...values)
 
   const viaje = db.prepare('SELECT * FROM viajes WHERE id = ?').get(id)
+  espejoSharePoint(upsertViajeEnSharePoint(viaje))
   res.status(201).json(withTrayectos(viaje))
 })
 
@@ -88,7 +97,9 @@ viajesRouter.patch('/:id/cerrar', (req, res) => {
      WHERE id = ?`,
   ).run(req.user.id, viaje.id)
 
-  res.json(withTrayectos(db.prepare('SELECT * FROM viajes WHERE id = ?').get(viaje.id)))
+  const cerrado = db.prepare('SELECT * FROM viajes WHERE id = ?').get(viaje.id)
+  espejoSharePoint(upsertViajeEnSharePoint(cerrado))
+  res.json(withTrayectos(cerrado))
 })
 
 // Agregar un trayecto interno (ilimitados) a un viaje abierto.
@@ -114,5 +125,7 @@ viajesRouter.post('/:id/trayectos', (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(id, viaje.id, numero, fecha_reporte, jefe_inmediato, area, origen, destino, transporte, hora_salida, hora_llegada_estimada, contacto_emergencia)
 
+  const trayecto = db.prepare('SELECT * FROM trayectos WHERE id = ?').get(id)
+  espejoSharePoint(agregarTrayectoEnSharePoint(trayecto))
   res.status(201).json(withTrayectos(db.prepare('SELECT * FROM viajes WHERE id = ?').get(viaje.id)))
 })

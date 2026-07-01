@@ -13,9 +13,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@azure/msal-browser": "^5.16.0",
+    "@azure/msal-node": "^5.3.1",
+    "@azure/msal-react": "^5.5.1",
     "@emailjs/browser": "^4.4.1",
     "@tailwindcss/vite": "^4.3.2",
-    "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.11.1",
     "cors": "^2.8.6",
     "dexie": "^4.4.4",
@@ -23,6 +25,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
+    "jwks-rsa": "^4.1.0",
     "lucide-react": "^1.23.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

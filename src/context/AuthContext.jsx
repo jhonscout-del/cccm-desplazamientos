@@ -1,10 +1,12 @@
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { MsalProvider, useMsal } from '@azure/msal-react'
+import { msalInstance, API_SCOPES } from '../lib/msal'
 import { api } from '../lib/api'
 
 const AuthContext = createContext(null)
-const STORAGE_KEY = 'cccm_auth'
+const STORAGE_KEY = 'cccm_user'
 
-function loadStoredAuth() {
+function loadCachedUser() {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY))
   } catch {
@@ -12,40 +14,68 @@ function loadStoredAuth() {
   }
 }
 
-// Persiste de forma síncrona (antes de actualizar el estado de React) para
-// que cualquier efecto que dispare una llamada a la API al iniciar sesión
-// siempre encuentre el token ya guardado en localStorage.
-function persist(value) {
-  if (value) localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
-  else localStorage.removeItem(STORAGE_KEY)
-}
+function InnerAuthProvider({ children }) {
+  const { instance, accounts } = useMsal()
+  const account = accounts[0] ?? null
+  const [user, setUser] = useState(loadCachedUser)
+  const [ready, setReady] = useState(false)
 
-export function AuthProvider({ children }) {
-  const [auth, setAuth] = useState(loadStoredAuth)
+  useEffect(() => {
+    if (account) instance.setActiveAccount(account)
+  }, [account, instance])
 
-  const login = async (email, password) => {
-    const { user, token } = await api.login({ email, password })
-    persist({ user, token })
-    setAuth({ user, token })
-  }
+  useEffect(() => {
+    let cancelled = false
 
-  const register = async (nombre, email, password) => {
-    const { user, token } = await api.register({ nombre, email, password })
-    persist({ user, token })
-    setAuth({ user, token })
-  }
+    async function syncPerfil() {
+      if (!account) {
+        localStorage.removeItem(STORAGE_KEY)
+        setUser(null)
+        setReady(true)
+        return
+      }
+      try {
+        // Da de alta (o refresca) al usuario local a partir de su cuenta
+        // Microsoft ya autenticada. Requiere conexión la primera vez.
+        const { user: perfil } = await api.me()
+        if (!cancelled) {
+          setUser(perfil)
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(perfil))
+        }
+      } catch {
+        // Sin conexión: seguimos con el perfil cacheado de un login anterior.
+      } finally {
+        if (!cancelled) setReady(true)
+      }
+    }
+
+    syncPerfil()
+    return () => {
+      cancelled = true
+    }
+  }, [account])
+
+  const login = () => instance.loginRedirect({ scopes: API_SCOPES })
 
   const logout = () => {
-    persist(null)
-    setAuth(null)
+    localStorage.removeItem(STORAGE_KEY)
+    instance.logoutRedirect()
   }
 
   const value = useMemo(
-    () => ({ user: auth?.user ?? null, isAuthenticated: Boolean(auth), login, register, logout }),
-    [auth],
+    () => ({ user, isAuthenticated: Boolean(account && user), ready, login, logout }),
+    [user, account, ready, login, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
+
+export function AuthProvider({ children }) {
+  return (
+    <MsalProvider instance={msalInstance}>
+      <InnerAuthProvider>{children}</InnerAuthProvider>
+    </MsalProvider>
+  )
 }
 
 export function useAuth() {
