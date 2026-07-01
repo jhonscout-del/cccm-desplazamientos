@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(node -v)",
+      "PowerShell(npm -v)",
+      "PowerShell(npm install express better-sqlite3 jsonwebtoken bcryptjs cors dotenv dexie @emailjs/browser react-router-dom)",
+      "PowerShell(npm install -D concurrently nodemon)",
+      "PowerShell(npm approve-scripts --allow-scripts-pending 2>&1)",
+      "PowerShell(npm approve-scripts better-sqlite3 2>&1)",
+      "PowerShell(npm install dexie-react-hooks)",
+      "PowerShell(npm run build 2>&1)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, Path })",
+      "Skill(run)",
+      "Skill(run:*)",
+      "PowerShell(Get-Command chromium-cli -ErrorAction SilentlyContinue)"
+    ]
+  }
+}
