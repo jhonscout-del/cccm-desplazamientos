@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "node server/index.js",
     "server": "node server/index.js",
     "server:watch": "nodemon server/index.js",
     "dev:all": "concurrently -n WEB,API -c blue,green \"npm:dev\" \"npm:server:watch\"",

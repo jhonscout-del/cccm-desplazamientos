@@ -155,18 +155,81 @@ Microsoft" no podrá completar el login (Microsoft rechazará un
 sigue funcionando con normalidad — simplemente no replica en SharePoint
 (lo registra en consola y continúa).
 
-## Compilar para producción
+## Despliegue en Azure (GitHub Actions)
+
+El repo trae dos workflows en `.github/workflows/`, uno por cada mitad de
+la app — **Static Web Apps solo sirve archivos estáticos, no ejecuta el
+backend**, así que hacen falta los dos:
+
+| Workflow | Qué despliega | Recurso de Azure |
+|---|---|---|
+| `azure-static-web-apps-*.yml` | `dist/` (frontend PWA) | Static Web App |
+| `azure-app-service-backend.yml` | `server/` (API Express + SQLite) | App Service (Linux, Node 20) |
+
+### 1. Crear el App Service del backend
+
+En Azure Portal: **Create a resource → Web App** → runtime **Node 20
+LTS**, sistema operativo **Linux**. Cuando exista:
+
+- **Configuration → General settings**: Startup Command puede quedar
+  vacío (usa `npm start`, ya definido en `package.json`).
+- **Configuration → Application settings**, agrega:
+  ```
+  AZURE_TENANT_ID=...
+  AZURE_API_CLIENT_ID=...
+  AZURE_GRAPH_CLIENT_ID=...
+  AZURE_GRAPH_CLIENT_SECRET=...
+  SHAREPOINT_SITE_ID=...
+  SHAREPOINT_LIST_VIAJES_ID=...
+  SHAREPOINT_LIST_TRAYECTOS_ID=...
+  DB_PATH=/home/data/cccm.sqlite
+  ```
+  `DB_PATH` **debe** apuntar a `/home/...` (no a la carpeta del código):
+  en App Service Linux, `/home` es lo único que persiste entre
+  despliegues — el resto del sistema de archivos se reemplaza cada vez
+  que se sube código nuevo.
+- **Overview**: copia el nombre de la Web App → secret de GitHub
+  `AZURE_WEBAPP_NAME`.
+- **Get publish profile** (botón en Overview) → descarga el XML y
+  pégalo completo como secret de GitHub `AZURE_WEBAPP_PUBLISH_PROFILE`.
+
+### 2. Secrets del repositorio en GitHub
+
+**Settings → Secrets and variables → Actions → New repository secret**,
+uno por cada variable (Vite las incrusta al compilar, así que deben
+existir como *secret*, no solo como Application Setting de Azure):
+
+```
+VITE_AZURE_CLIENT_ID
+VITE_AZURE_TENANT_ID
+VITE_AZURE_API_SCOPE
+VITE_API_URL                    -> https://<AZURE_WEBAPP_NAME>.azurewebsites.net/api
+VITE_EMAILJS_SERVICE_ID
+VITE_EMAILJS_TEMPLATE_ID
+VITE_EMAILJS_PUBLIC_KEY
+AZURE_WEBAPP_NAME
+AZURE_WEBAPP_PUBLISH_PROFILE
+```
+
+`AZURE_STATIC_WEB_APPS_API_TOKEN_...` ya lo crea Azure automáticamente
+al conectar el repo. Después de agregar los secrets, vuelve a correr el
+workflow de Static Web Apps (un `git commit --allow-empty` o "Re-run
+jobs" en GitHub Actions) para que el próximo build sí los incluya —
+builds anteriores quedaron compilados sin ellos.
+
+Recuerda también agregar la URL final del frontend (la de Static Web
+Apps) como Redirect URI tipo **SPA** en el App Registration del login.
+
+### Desarrollo / otros hosting
 
 ```bash
 npm run build     # genera dist/ (PWA con service worker)
-npm run server    # backend (usa PM2, systemd o similar para mantenerlo vivo)
+npm start          # backend (usa PM2, systemd o similar para mantenerlo vivo)
 ```
 
-Sirve `dist/` desde cualquier hosting estático (Azure Static Web Apps,
-Netlify, un VPS con nginx, etc.) y despliega `server/` en un proceso
-Node.js aparte. Si el frontend y el backend no comparten dominio, define
-`VITE_API_URL` apuntando al backend antes de compilar. Recuerda agregar
-la URL de producción como Redirect URI (tipo SPA) en el App Registration.
+También puedes servir `dist/` y desplegar `server/` en cualquier otro
+proveedor (Netlify, un VPS con nginx, etc.) — solo ajusta `VITE_API_URL`
+y `DB_PATH` según corresponda.
 
 ## Notas sobre el offline
 

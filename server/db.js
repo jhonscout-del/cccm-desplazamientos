@@ -1,9 +1,16 @@
 import Database from 'better-sqlite3'
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const dbPath = process.env.DB_PATH || path.join(__dirname, 'data.sqlite')
+
+// En Azure App Service (Linux), el código bajo /home/site/wwwroot se
+// reemplaza en cada despliegue: si DB_PATH apunta ahí, la base se perdería
+// con cada deploy. Debe apuntar a una carpeta persistida (p.ej. /home/data),
+// que puede no existir todavía en el primer arranque.
+fs.mkdirSync(path.dirname(dbPath), { recursive: true })
 
 export const db = new Database(dbPath)
 db.pragma('journal_mode = WAL')
