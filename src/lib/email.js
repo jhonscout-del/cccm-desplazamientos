@@ -1,32 +1,54 @@
-import emailjs from '@emailjs/browser'
+import { InteractionRequiredAuthError } from '@azure/msal-browser'
+import { msalInstance, msalReady, MAIL_SCOPES } from './msal'
 import { transporteResumen } from './transporte'
 
 // Correo de seguimiento fijo: siempre recibe copia de todos los reportes.
 export const CORREO_FIJO = 'gerente.seguridad@colombiasinminas.org'
 
-const SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID
-const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID
-const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+async function graphMailToken() {
+  await msalReady
+  const account = msalInstance.getActiveAccount() || msalInstance.getAllAccounts()[0]
+  if (!account) throw new Error('No hay sesión activa para enviar el correo')
 
-function emailjsConfigured() {
-  return Boolean(SERVICE_ID && TEMPLATE_ID && PUBLIC_KEY)
+  try {
+    const result = await msalInstance.acquireTokenSilent({ scopes: MAIL_SCOPES, account })
+    return result.accessToken
+  } catch (err) {
+    if (err instanceof InteractionRequiredAuthError) {
+      await msalInstance.acquireTokenRedirect({ scopes: MAIL_SCOPES, account })
+    }
+    throw err
+  }
 }
 
+// Envía el correo desde el buzón del usuario que inició sesión, vía
+// Microsoft Graph (POST /me/sendMail), a los dos destinatarios.
 async function enviarCorreo({ asunto, cuerpo, correoVariable }) {
-  if (!emailjsConfigured()) {
-    throw new Error('EmailJS no está configurado (faltan variables VITE_EMAILJS_*)')
-  }
-  return emailjs.send(
-    SERVICE_ID,
-    TEMPLATE_ID,
-    {
-      to_fijo: CORREO_FIJO,
-      to_variable: correoVariable || '',
-      subject: asunto,
-      message: cuerpo,
+  const token = await graphMailToken()
+  const destinatarios = [CORREO_FIJO, correoVariable]
+    .filter(Boolean)
+    .map((address) => ({ emailAddress: { address } }))
+
+  const res = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
     },
-    { publicKey: PUBLIC_KEY },
-  )
+    body: JSON.stringify({
+      message: {
+        subject: asunto,
+        body: { contentType: 'Text', content: cuerpo },
+        toRecipients: destinatarios,
+      },
+      saveToSentItems: true,
+    }),
+  })
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`Graph sendMail -> ${res.status}: ${body}`)
+  }
 }
 
 export function enviarCorreoCheckin(viaje) {

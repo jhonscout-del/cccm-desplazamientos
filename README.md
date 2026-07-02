@@ -25,9 +25,10 @@ Funciona sin conexión en celulares y PC (PWA instalable).
   Desde esa lista, cualquiera con acceso puede exportarlo a Excel con un
   clic ("Exportar a Excel" es una función nativa de las listas de
   SharePoint).
-- **Correo**: [EmailJS](https://www.emailjs.com). Cada evento se envía a
-  un correo fijo y a un correo variable que cada viajero escribe en su
-  registro.
+- **Correo**: Microsoft Graph (`Mail.Send` delegado). El correo se envía
+  desde el buzón del propio viajero que inició sesión — sin servicio de
+  correo externo — a un correo fijo y a un correo variable que cada
+  viajero escribe en su registro.
 
 ## Roles
 
@@ -67,10 +68,13 @@ Microsoft 365 de la organización (Azure Portal → Microsoft Entra ID).
      and users*, estado *Enabled*.
    - Copia el scope completo (`api://<client-id>/access_as_user`) a
      `VITE_AZURE_API_SCOPE`.
-4. **API permissions**: agrega `Microsoft Graph → User.Read` (delegado) —
-   suele venir por defecto. No se necesitan más permisos delegados: el
-   login solo identifica al usuario, no accede a SharePoint desde el
-   navegador.
+4. **API permissions → Add a permission → Microsoft Graph → Delegated
+   permissions**: agrega `User.Read` (suele venir por defecto) y
+   **`Mail.Send`** (necesario para que la app envíe el correo desde la
+   cuenta del viajero logueado). Clic **Grant admin consent for
+   \<tu organización\>** — sin este consentimiento del administrador,
+   Microsoft le pedirá permiso a cada usuario individualmente la primera
+   vez que intente enviar un correo.
 
 ### 2. App Registration "solo aplicación" para Graph/SharePoint
 
@@ -124,24 +128,18 @@ existen) y al final imprime los IDs — cópialos en
 Desde esa lista, en SharePoint, usa **Exportar → Exportar a Excel** para
 obtener el archivo `.xlsx` cuando lo necesites.
 
-## EmailJS
-
-1. Crea una cuenta en https://www.emailjs.com y un "Email Service".
-2. Crea una plantilla con las variables `{{to_fijo}}`, `{{to_variable}}`,
-   `{{subject}}` y `{{message}}`, y configúrala para enviar a ambos
-   destinatarios (por ejemplo, "To" = `{{to_fijo}}, {{to_variable}}`).
-3. Copia `Service ID`, `Template ID` y `Public Key` a las variables
-   `VITE_EMAILJS_*` del archivo `.env`.
-
 El correo fijo (`gerente.seguridad@colombiasinminas.org`) está definido
 en [src/lib/email.js](src/lib/email.js) y siempre recibe copia; el
-correo variable lo escribe cada viajero al hacer el check-in.
+correo variable lo escribe cada viajero al hacer el check-in. No hay
+nada más que configurar aparte del permiso `Mail.Send` del paso 1.4 —
+el envío usa la misma sesión de Microsoft del usuario, sin variables ni
+cuentas adicionales.
 
 ## Ejecutar en desarrollo
 
 ```bash
 npm install
-cp .env.example .env   # completa las variables de Azure AD / Graph / EmailJS
+cp .env.example .env   # completa las variables de Azure AD / Graph
 npm run dev:all        # levanta el frontend (Vite) y el backend (Express) juntos
 ```
 
@@ -164,11 +162,11 @@ backend**, así que hacen falta los dos:
 | Workflow | Qué despliega | Recurso de Azure |
 |---|---|---|
 | `azure-static-web-apps-*.yml` | `dist/` (frontend PWA) | Static Web App |
-| `azure-app-service-backend.yml` | `server/` (API Express + SQLite) | App Service (Linux, Node 20) |
+| `azure-app-service-backend.yml` | `server/` (API Express + SQLite) | App Service (Linux, Node 22) |
 
 ### 1. Crear el App Service del backend
 
-En Azure Portal: **Create a resource → Web App** → runtime **Node 20
+En Azure Portal: **Create a resource → Web App** → runtime **Node 22
 LTS**, sistema operativo **Linux**. Cuando exista:
 
 - **Configuration → General settings**: Startup Command puede quedar
@@ -190,6 +188,10 @@ LTS**, sistema operativo **Linux**. Cuando exista:
   que se sube código nuevo.
 - **Overview**: copia el nombre de la Web App → secret de GitHub
   `AZURE_WEBAPP_NAME`.
+- Si al intentar descargar el perfil de publicación aparece "La
+  autenticación básica está deshabilitada": ve a **Settings →
+  Configuration → General settings** → activa **"SCM Basic Auth
+  Publishing Credentials"** → **Save**.
 - **Get publish profile** (botón en Overview) → descarga el XML y
   pégalo completo como secret de GitHub `AZURE_WEBAPP_PUBLISH_PROFILE`.
 
@@ -204,18 +206,23 @@ VITE_AZURE_CLIENT_ID
 VITE_AZURE_TENANT_ID
 VITE_AZURE_API_SCOPE
 VITE_API_URL                    -> https://<AZURE_WEBAPP_NAME>.azurewebsites.net/api
-VITE_EMAILJS_SERVICE_ID
-VITE_EMAILJS_TEMPLATE_ID
-VITE_EMAILJS_PUBLIC_KEY
 AZURE_WEBAPP_NAME
 AZURE_WEBAPP_PUBLISH_PROFILE
 ```
 
 `AZURE_STATIC_WEB_APPS_API_TOKEN_...` ya lo crea Azure automáticamente
-al conectar el repo. Después de agregar los secrets, vuelve a correr el
-workflow de Static Web Apps (un `git commit --allow-empty` o "Re-run
-jobs" en GitHub Actions) para que el próximo build sí los incluya —
-builds anteriores quedaron compilados sin ellos.
+al conectar el repo. Si el deploy falla con "deployment_token was not
+provided", ese secret específico se perdió — ve al recurso Static Web
+App → **"Manage deployment token"**, copia el valor, y vuelve a crear
+ese mismo secret en GitHub con el nombre exacto que pide el workflow.
+
+Después de agregar los secrets, vuelve a correr el workflow de Static
+Web Apps ("Run workflow" en la pestaña Actions) para que el próximo
+build sí los incluya — builds anteriores quedaron compilados sin ellos.
+
+**No borres ni recrees el recurso Static Web App desde Azure Portal**:
+cada vez que eso pasa, Azure regenera el archivo de workflow desde cero
+(con una URL nueva) y se pierden estos ajustes.
 
 Recuerda también agregar la URL final del frontend (la de Static Web
 Apps) como Redirect URI tipo **SPA** en el App Registration del login.

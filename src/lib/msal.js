@@ -19,5 +19,9 @@ export const msalConfig = {
 // necesario para que el token que reciba Express tenga la audiencia correcta.
 export const API_SCOPES = [import.meta.env.VITE_AZURE_API_SCOPE]
 
+// Scope delegado de Microsoft Graph para enviar el correo desde la cuenta
+// del propio usuario que inició sesión (audiencia distinta a API_SCOPES).
+export const MAIL_SCOPES = ['Mail.Send']
+
 export const msalInstance = new PublicClientApplication(msalConfig)
 export const msalReady = msalInstance.initialize()
