@@ -1,6 +1,11 @@
 import { localDb, STATUS } from './localdb'
 import { api } from './api'
-import { enviarCorreoCheckin, enviarCorreoTrayecto, enviarCorreoCierre } from './email'
+import {
+  enviarCorreoCheckin,
+  enviarCorreoTrayecto,
+  enviarCorreoCierre,
+  enviarCorreoCierreTrayecto,
+} from './email'
 
 const nowIso = () => new Date().toISOString()
 
@@ -42,6 +47,7 @@ function fromApiViaje(row, overrides = {}) {
     id: row.id,
     userId: row.user_id,
     estado: row.estado,
+    codigo: row.codigo,
     nombreReporta: row.nombre_reporta,
     fechaViaje: row.fecha_viaje,
     fechaReporte: row.fecha_reporte,
@@ -68,6 +74,8 @@ function fromApiTrayecto(row, overrides = {}) {
     id: row.id,
     viajeId: row.viaje_id,
     numero: row.numero,
+    codigo: row.codigo,
+    estado: row.estado,
     fechaReporte: row.fecha_reporte,
     jefeInmediato: row.jefe_inmediato,
     area: row.area,
@@ -78,8 +86,22 @@ function fromApiTrayecto(row, overrides = {}) {
     horaLlegadaEstimada: row.hora_llegada_estimada,
     contactoEmergencia: row.contacto_emergencia,
     createdAt: row.created_at,
+    closedAt: row.closed_at,
     syncStatus: STATUS.SYNCED,
+    closeSyncStatus: row.estado === 'cerrado' ? STATUS.SYNCED : STATUS.NA,
     ...overrides,
+  }
+}
+
+function fromApiObservacion(row) {
+  return {
+    id: row.id,
+    viajeId: row.viaje_id,
+    trayectoId: row.trayecto_id,
+    texto: row.texto,
+    autor: row.autor,
+    createdAt: row.created_at,
+    syncStatus: STATUS.SYNCED,
   }
 }
 
@@ -88,6 +110,7 @@ export async function crearViajeLocal(user, data) {
     id: crypto.randomUUID(),
     userId: user.id,
     estado: 'abierto',
+    codigo: null, // lo asigna el servidor al sincronizar
     ...data,
     createdAt: nowIso(),
     updatedAt: nowIso(),
@@ -108,10 +131,15 @@ export async function agregarTrayectoLocal(viaje, data) {
     id: crypto.randomUUID(),
     viajeId: viaje.id,
     numero: existentes + 2, // el viaje principal cuenta como trayecto 1
+    codigo: null, // se completa con "<codigo del viaje>-T<numero>" al sincronizar
+    estado: 'abierto',
     ...data,
     createdAt: nowIso(),
+    closedAt: null,
     syncStatus: STATUS.PENDING,
     emailStatus: STATUS.PENDING,
+    closeSyncStatus: STATUS.NA,
+    closeEmailStatus: STATUS.NA,
   }
   await localDb.trayectos.add(trayecto)
   syncNow()
@@ -129,6 +157,35 @@ export async function cerrarViajeLocal(viaje) {
   syncNow()
 }
 
+export async function cerrarTrayectoLocal(trayecto) {
+  await localDb.trayectos.update(trayecto.id, {
+    estado: 'cerrado',
+    closedAt: nowIso(),
+    closeSyncStatus: STATUS.PENDING,
+    closeEmailStatus: STATUS.PENDING,
+  })
+  syncNow()
+}
+
+// texto de una nota de seguimiento; trayecto opcional (null = observación
+// del viaje principal). Solo debe llamarse mientras el viaje/trayecto siga
+// abierto (la UI ya oculta el formulario en ese caso; el backend lo valida
+// de nuevo por si acaso).
+export async function agregarObservacionLocal(viaje, texto, trayecto = null) {
+  const obs = {
+    id: crypto.randomUUID(),
+    viajeId: viaje.id,
+    trayectoId: trayecto?.id ?? null,
+    texto,
+    autor: null,
+    createdAt: nowIso(),
+    syncStatus: STATUS.PENDING,
+  }
+  await localDb.observaciones.add(obs)
+  syncNow()
+  return obs
+}
+
 export function misViajes(userId) {
   return localDb.viajes.where('userId').equals(userId).reverse().sortBy('createdAt')
 }
@@ -140,11 +197,19 @@ export async function viajeConTrayectos(id) {
   return { viaje, trayectos }
 }
 
+export function observacionesDe(viajeId, trayectoId = null) {
+  return localDb.observaciones
+    .where('viajeId').equals(viajeId)
+    .and((o) => (trayectoId ? o.trayectoId === trayectoId : !o.trayectoId))
+    .sortBy('createdAt')
+}
+
 let syncing = false
 
-// Empuja lo pendiente (creaciones, trayectos, cierres) al backend y dispara
-// los correos correspondientes. Es seguro llamarla repetidamente: cada paso
-// solo actúa sobre registros que aún no están sincronizados/enviados.
+// Empuja lo pendiente (creaciones, trayectos, cierres, observaciones) al
+// backend y dispara los correos correspondientes. Es seguro llamarla
+// repetidamente: cada paso solo actúa sobre registros que aún no están
+// sincronizados/enviados.
 export async function syncNow() {
   if (syncing) return
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return
@@ -153,8 +218,8 @@ export async function syncNow() {
     const viajesPendientes = await localDb.viajes.where('syncStatus').equals(STATUS.PENDING).toArray()
     for (const v of viajesPendientes) {
       try {
-        await api.crearViaje(toApiViaje(v))
-        await localDb.viajes.update(v.id, { syncStatus: STATUS.SYNCED })
+        const data = await api.crearViaje(toApiViaje(v))
+        await localDb.viajes.update(v.id, { syncStatus: STATUS.SYNCED, codigo: data.codigo })
       } catch {
         continue
       }
@@ -178,8 +243,9 @@ export async function syncNow() {
       const viaje = await localDb.viajes.get(t.viajeId)
       if (!viaje || viaje.syncStatus !== STATUS.SYNCED) continue
       try {
-        await api.crearTrayecto(t.viajeId, toApiTrayecto(t))
-        await localDb.trayectos.update(t.id, { syncStatus: STATUS.SYNCED })
+        const data = await api.crearTrayecto(t.viajeId, toApiTrayecto(t))
+        const servTrayecto = data.trayectos.find((tr) => tr.id === t.id)
+        await localDb.trayectos.update(t.id, { syncStatus: STATUS.SYNCED, codigo: servTrayecto?.codigo })
       } catch {
         continue
       }
@@ -197,6 +263,24 @@ export async function syncNow() {
         await localDb.trayectos.update(t.id, { emailStatus: STATUS.SENT })
       } catch {
         await localDb.trayectos.update(t.id, { emailStatus: STATUS.ERROR })
+      }
+    }
+
+    const obsPendientes = await localDb.observaciones.where('syncStatus').equals(STATUS.PENDING).toArray()
+    for (const o of obsPendientes) {
+      const viaje = await localDb.viajes.get(o.viajeId)
+      if (!viaje || viaje.syncStatus !== STATUS.SYNCED) continue
+      try {
+        if (o.trayectoId) {
+          const trayecto = await localDb.trayectos.get(o.trayectoId)
+          if (!trayecto || trayecto.syncStatus !== STATUS.SYNCED) continue
+          await api.agregarObservacionTrayecto(o.viajeId, o.trayectoId, { id: o.id, texto: o.texto })
+        } else {
+          await api.agregarObservacionViaje(o.viajeId, { id: o.id, texto: o.texto })
+        }
+        await localDb.observaciones.update(o.id, { syncStatus: STATUS.SYNCED })
+      } catch {
+        continue
       }
     }
 
@@ -220,6 +304,31 @@ export async function syncNow() {
         await localDb.viajes.update(v.id, { closeEmailStatus: STATUS.SENT })
       } catch {
         await localDb.viajes.update(v.id, { closeEmailStatus: STATUS.ERROR })
+      }
+    }
+
+    const cierresTrayectoPendientes = await localDb.trayectos.where('closeSyncStatus').equals(STATUS.PENDING).toArray()
+    for (const t of cierresTrayectoPendientes) {
+      try {
+        await api.cerrarTrayecto(t.viajeId, t.id)
+        await localDb.trayectos.update(t.id, { closeSyncStatus: STATUS.SYNCED })
+      } catch {
+        continue
+      }
+    }
+
+    const cierresTrayectoNecesitanEmail = await localDb.trayectos
+      .where('closeSyncStatus').equals(STATUS.SYNCED)
+      .and((t) => t.closeEmailStatus === STATUS.PENDING || t.closeEmailStatus === STATUS.ERROR)
+      .toArray()
+    for (const t of cierresTrayectoNecesitanEmail) {
+      const viaje = await localDb.viajes.get(t.viajeId)
+      if (!viaje) continue
+      try {
+        await enviarCorreoCierreTrayecto(viaje, t)
+        await localDb.trayectos.update(t.id, { closeEmailStatus: STATUS.SENT })
+      } catch {
+        await localDb.trayectos.update(t.id, { closeEmailStatus: STATUS.ERROR })
       }
     }
   } finally {
@@ -247,10 +356,25 @@ export async function pullMisViajes() {
 
     const full = await api.obtenerViaje(row.id).catch(() => null)
     if (!full) continue
+
+    for (const orow of full.observaciones || []) {
+      const localO = await localDb.observaciones.get(orow.id)
+      if (localO && localO.syncStatus === STATUS.PENDING) continue
+      await localDb.observaciones.put(fromApiObservacion(orow))
+    }
+
     for (const trow of full.trayectos) {
       const localT = await localDb.trayectos.get(trow.id)
       if (localT && localT.syncStatus === STATUS.PENDING) continue
-      await localDb.trayectos.put(fromApiTrayecto(trow, { emailStatus: localT?.emailStatus ?? STATUS.SENT }))
+      await localDb.trayectos.put(fromApiTrayecto(trow, {
+        emailStatus: localT?.emailStatus ?? STATUS.SENT,
+        closeEmailStatus: localT?.closeEmailStatus ?? (trow.estado === 'cerrado' ? STATUS.SENT : STATUS.NA),
+      }))
+      for (const orow of trow.observaciones || []) {
+        const localO = await localDb.observaciones.get(orow.id)
+        if (localO && localO.syncStatus === STATUS.PENDING) continue
+        await localDb.observaciones.put(fromApiObservacion(orow))
+      }
     }
   }
 }

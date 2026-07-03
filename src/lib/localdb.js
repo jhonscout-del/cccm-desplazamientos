@@ -11,6 +11,14 @@ localDb.version(1).stores({
   trayectos: 'id, viajeId, syncStatus, emailStatus, createdAt',
 })
 
+localDb.version(2).stores({
+  viajes:
+    'id, userId, estado, syncStatus, emailStatus, closeSyncStatus, closeEmailStatus, createdAt',
+  trayectos:
+    'id, viajeId, estado, syncStatus, emailStatus, closeSyncStatus, closeEmailStatus, createdAt',
+  observaciones: 'id, viajeId, trayectoId, syncStatus, createdAt',
+})
+
 export const STATUS = {
   PENDING: 'pending',
   SYNCED: 'synced',

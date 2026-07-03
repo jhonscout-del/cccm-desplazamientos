@@ -69,7 +69,7 @@ export function Dashboard() {
           <li key={v.id} className="rounded border border-[var(--border)] p-3 text-sm">
             <div className="flex items-center justify-between gap-2">
               <span className="font-medium">
-                {v.origen} → {v.destino} — {v.nombre_reporta}
+                {v.codigo && <span className="text-[var(--accent)]">{v.codigo}</span>} {v.origen} → {v.destino} — {v.nombre_reporta}
               </span>
               <EstadoBadge estado={v.estado} />
             </div>

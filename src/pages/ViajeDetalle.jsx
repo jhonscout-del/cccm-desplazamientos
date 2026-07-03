@@ -3,9 +3,16 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { localDb } from '../lib/localdb'
 import { useAuth } from '../context/AuthContext'
-import { agregarTrayectoLocal, cerrarViajeLocal } from '../lib/sync'
+import {
+  agregarTrayectoLocal,
+  cerrarViajeLocal,
+  cerrarTrayectoLocal,
+  agregarObservacionLocal,
+  observacionesDe,
+} from '../lib/sync'
 import { transporteResumen } from '../lib/transporte'
 import { EstadoBadge } from '../components/EstadoBadge'
+import { Observaciones } from '../components/Observaciones'
 
 const hoy = () => new Date().toISOString().slice(0, 10)
 
@@ -31,6 +38,7 @@ export function ViajeDetalle() {
     [id],
     [],
   )
+  const observacionesViaje = useLiveQuery(() => observacionesDe(id), [id], [])
   const [mostrarForm, setMostrarForm] = useState(false)
   const [nuevo, setNuevo] = useState(TRAYECTO_VACIO)
   const [cerrando, setCerrando] = useState(false)
@@ -62,9 +70,10 @@ export function ViajeDetalle() {
         ← Mis viajes
       </button>
 
-      <div className="flex flex-col gap-2 rounded border border-[var(--border)] p-4">
+      <div className="flex flex-col gap-3 rounded border border-[var(--border)] p-4">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold">
+            {viaje.codigo && <span className="text-[var(--accent)]">{viaje.codigo}</span>}{' '}
             {viaje.origen} → {viaje.destino}
           </h1>
           <EstadoBadge estado={viaje.estado} />
@@ -79,6 +88,12 @@ export function ViajeDetalle() {
           <Dato label="Contacto de emergencia" valor={viaje.contactoNombre} />
           {viaje.closedAt && <Dato label="Cerrado el" valor={new Date(viaje.closedAt).toLocaleString()} full />}
         </dl>
+
+        <Observaciones
+          observaciones={observacionesViaje}
+          editable={viaje.estado === 'abierto'}
+          onAgregar={(texto) => agregarObservacionLocal(viaje, texto)}
+        />
       </div>
 
       <div className="flex flex-col gap-3">
@@ -88,17 +103,7 @@ export function ViajeDetalle() {
         )}
         <ul className="flex flex-col gap-2">
           {trayectos?.map((t) => (
-            <li key={t.id} className="rounded border border-[var(--border)] p-3 text-sm">
-              <div className="font-medium">
-                Trayecto {t.numero}: {t.origen} → {t.destino}
-              </div>
-              <div className="text-[var(--text)]">
-                {t.fechaReporte} · Salida {t.horaSalida} · Llegada estimada {t.horaLlegadaEstimada}
-              </div>
-              <div className="text-[var(--text)]">
-                {t.transporte} · Emergencia: {t.contactoEmergencia}
-              </div>
-            </li>
+            <TrayectoCard key={t.id} viaje={viaje} trayecto={t} user={user} />
           ))}
         </ul>
 
@@ -173,6 +178,60 @@ export function ViajeDetalle() {
         </p>
       )}
     </div>
+  )
+}
+
+function TrayectoCard({ viaje, trayecto, user }) {
+  const observaciones = useLiveQuery(
+    () => observacionesDe(viaje.id, trayecto.id),
+    [viaje.id, trayecto.id],
+    [],
+  )
+  const [cerrando, setCerrando] = useState(false)
+  const puedeCerrar = trayecto.estado === 'abierto' && (viaje.userId === user.id || user.role === 'control')
+
+  const onCerrar = async () => {
+    if (!confirm(`¿Confirmas que deseas cerrar el trayecto ${trayecto.codigo || trayecto.numero}?`)) return
+    setCerrando(true)
+    await cerrarTrayectoLocal(trayecto)
+    setCerrando(false)
+  }
+
+  return (
+    <li className="flex flex-col gap-2 rounded border border-[var(--border)] p-3 text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-medium">
+          {trayecto.codigo || `Trayecto ${trayecto.numero}`}: {trayecto.origen} → {trayecto.destino}
+        </div>
+        <EstadoBadge estado={trayecto.estado} />
+      </div>
+      <div className="text-[var(--text)]">
+        {trayecto.fechaReporte} · Salida {trayecto.horaSalida} · Llegada estimada {trayecto.horaLlegadaEstimada}
+      </div>
+      <div className="text-[var(--text)]">
+        {trayecto.transporte} · Emergencia: {trayecto.contactoEmergencia}
+      </div>
+      {trayecto.closedAt && (
+        <div className="text-[var(--text)]">Cerrado el {new Date(trayecto.closedAt).toLocaleString()}</div>
+      )}
+
+      <Observaciones
+        observaciones={observaciones}
+        editable={trayecto.estado === 'abierto'}
+        onAgregar={(texto) => agregarObservacionLocal(viaje, texto, trayecto)}
+      />
+
+      {puedeCerrar && (
+        <button
+          type="button"
+          onClick={onCerrar}
+          disabled={cerrando}
+          className="w-fit rounded border border-red-600 px-2 py-1 text-xs text-red-600 disabled:opacity-50"
+        >
+          {cerrando ? 'Cerrando…' : 'Cerrar trayecto'}
+        </button>
+      )}
+    </li>
   )
 }
 

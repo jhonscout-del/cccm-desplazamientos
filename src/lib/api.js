@@ -47,6 +47,13 @@ export const api = {
   listarViajes: (estado) => request(`/viajes${estado ? `?estado=${estado}` : ''}`),
   obtenerViaje: (id) => request(`/viajes/${id}`),
   cerrarViaje: (id) => request(`/viajes/${id}/cerrar`, { method: 'PATCH' }),
+  agregarObservacionViaje: (viajeId, obs) =>
+    request(`/viajes/${viajeId}/observaciones`, { method: 'POST', body: obs }),
+
   crearTrayecto: (viajeId, trayecto) =>
     request(`/viajes/${viajeId}/trayectos`, { method: 'POST', body: trayecto }),
+  cerrarTrayecto: (viajeId, trayectoId) =>
+    request(`/viajes/${viajeId}/trayectos/${trayectoId}/cerrar`, { method: 'PATCH' }),
+  agregarObservacionTrayecto: (viajeId, trayectoId, obs) =>
+    request(`/viajes/${viajeId}/trayectos/${trayectoId}/observaciones`, { method: 'POST', body: obs }),
 }

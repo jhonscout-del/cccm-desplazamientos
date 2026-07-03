@@ -74,14 +74,37 @@ function transporteResumenPlano(tipo, detalleJson) {
   }
 }
 
-// Refleja el viaje en la lista de SharePoint (crea el item si no existe,
-// o lo actualiza si ya se había sincronizado antes, p.ej. al cerrarlo).
-export async function upsertViajeEnSharePoint(viaje) {
+// Crea el item si no existe (buscado por su columna indexada), o lo
+// actualiza si ya se había sincronizado antes (p.ej. al cerrarlo o agregar
+// una observación) — mismo patrón para viajes y trayectos.
+async function upsertItem(listId, filterField, filterValue, fields) {
+  const existentes = await graphFetch(
+    `/sites/${SITE_ID}/lists/${listId}/items?$filter=fields/${filterField} eq '${filterValue}'&$expand=fields`,
+  )
+
+  if (existentes.value?.length) {
+    await graphFetch(`/sites/${SITE_ID}/lists/${listId}/items/${existentes.value[0].id}/fields`, {
+      method: 'PATCH',
+      body: JSON.stringify(fields),
+    })
+  } else {
+    await graphFetch(`/sites/${SITE_ID}/lists/${listId}/items`, {
+      method: 'POST',
+      body: JSON.stringify({ fields }),
+    })
+  }
+}
+
+// Refleja el viaje en la lista de SharePoint (crea el item si no existe, o
+// lo actualiza si ya se había sincronizado antes, p.ej. al cerrarlo o
+// agregarle una observación).
+export async function upsertViajeEnSharePoint(viaje, observacionesTexto = '') {
   if (!GRAPH_ENABLED) return
 
   const fields = {
-    Title: `${viaje.origen} -> ${viaje.destino}`,
+    Title: `${viaje.codigo}: ${viaje.origen} -> ${viaje.destino}`,
     ViajeId: viaje.id,
+    Codigo: viaje.codigo,
     Estado: viaje.estado,
     NombreReporta: viaje.nombre_reporta,
     FechaViaje: viaje.fecha_viaje,
@@ -96,33 +119,24 @@ export async function upsertViajeEnSharePoint(viaje) {
     ContactoNombre: viaje.contacto_nombre,
     CorreoVariable: viaje.correo_variable,
     ClosedAt: viaje.closed_at || '',
+    Observaciones: observacionesTexto,
   }
 
-  const existentes = await graphFetch(
-    `/sites/${SITE_ID}/lists/${LIST_VIAJES_ID}/items?$filter=fields/ViajeId eq '${viaje.id}'&$expand=fields`,
-  )
-
-  if (existentes.value?.length) {
-    await graphFetch(`/sites/${SITE_ID}/lists/${LIST_VIAJES_ID}/items/${existentes.value[0].id}/fields`, {
-      method: 'PATCH',
-      body: JSON.stringify(fields),
-    })
-  } else {
-    await graphFetch(`/sites/${SITE_ID}/lists/${LIST_VIAJES_ID}/items`, {
-      method: 'POST',
-      body: JSON.stringify({ fields }),
-    })
-  }
+  await upsertItem(LIST_VIAJES_ID, 'ViajeId', viaje.id, fields)
 }
 
-export async function agregarTrayectoEnSharePoint(trayecto) {
+// Igual que arriba, pero para un trayecto interno — el código y el filtro
+// de SharePoint quedan ligados al viaje al que pertenece.
+export async function upsertTrayectoEnSharePoint(trayecto, observacionesTexto = '') {
   if (!GRAPH_ENABLED || !LIST_TRAYECTOS_ID) return
 
   const fields = {
-    Title: `Trayecto ${trayecto.numero}: ${trayecto.origen} -> ${trayecto.destino}`,
+    Title: `${trayecto.codigo}: ${trayecto.origen} -> ${trayecto.destino}`,
     TrayectoId: trayecto.id,
+    Codigo: trayecto.codigo,
     ViajeId: trayecto.viaje_id,
     Numero: trayecto.numero,
+    Estado: trayecto.estado,
     FechaReporte: trayecto.fecha_reporte,
     JefeInmediato: trayecto.jefe_inmediato,
     Area: trayecto.area,
@@ -132,10 +146,9 @@ export async function agregarTrayectoEnSharePoint(trayecto) {
     HoraSalida: trayecto.hora_salida,
     HoraLlegadaEstimada: trayecto.hora_llegada_estimada,
     ContactoEmergencia: trayecto.contacto_emergencia,
+    ClosedAt: trayecto.closed_at || '',
+    Observaciones: observacionesTexto,
   }
 
-  await graphFetch(`/sites/${SITE_ID}/lists/${LIST_TRAYECTOS_ID}/items`, {
-    method: 'POST',
-    body: JSON.stringify({ fields }),
-  })
+  await upsertItem(LIST_TRAYECTOS_ID, 'TrayectoId', trayecto.id, fields)
 }

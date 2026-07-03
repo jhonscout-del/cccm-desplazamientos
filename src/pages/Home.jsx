@@ -40,7 +40,7 @@ export function Home() {
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium">
-                  {v.origen} → {v.destino}
+                  {v.codigo && <span className="text-[var(--accent)]">{v.codigo}</span>} {v.origen} → {v.destino}
                 </span>
                 <EstadoBadge estado={v.estado} />
               </div>

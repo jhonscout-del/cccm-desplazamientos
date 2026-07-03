@@ -52,7 +52,7 @@ async function enviarCorreo({ asunto, cuerpo, correoVariable }) {
 }
 
 export function enviarCorreoCheckin(viaje) {
-  const asunto = `Check-in CCCM: ${viaje.nombreReporta} — ${viaje.origen} a ${viaje.destino}`
+  const asunto = `Check-in CCCM ${viaje.codigo || ''}: ${viaje.nombreReporta} — ${viaje.origen} a ${viaje.destino}`
   const cuerpo = [
     `Nombre de quien reporta: ${viaje.nombreReporta}`,
     `Fecha del viaje: ${viaje.fechaViaje}`,
@@ -70,10 +70,10 @@ export function enviarCorreoCheckin(viaje) {
 }
 
 export function enviarCorreoTrayecto(viaje, trayecto) {
-  const asunto = `Trayecto ${trayecto.numero} CCCM: ${viaje.nombreReporta} — ${trayecto.origen} a ${trayecto.destino}`
+  const asunto = `Trayecto ${trayecto.codigo || trayecto.numero} CCCM: ${viaje.nombreReporta} — ${trayecto.origen} a ${trayecto.destino}`
   const cuerpo = [
-    `Viaje principal: ${viaje.origen} - ${viaje.destino} (${viaje.nombreReporta})`,
-    `Trayecto ${trayecto.numero}`,
+    `Viaje principal: ${viaje.codigo || ''} ${viaje.origen} - ${viaje.destino} (${viaje.nombreReporta})`,
+    `Trayecto ${trayecto.codigo || trayecto.numero}`,
     `Fecha del reporte: ${trayecto.fechaReporte}`,
     `Jefe inmediato: ${trayecto.jefeInmediato}`,
     `Área: ${trayecto.area}`,
@@ -87,13 +87,25 @@ export function enviarCorreoTrayecto(viaje, trayecto) {
 }
 
 export function enviarCorreoCierre(viaje) {
-  const asunto = `Cierre de viaje CCCM: ${viaje.nombreReporta} — ${viaje.origen} a ${viaje.destino}`
+  const asunto = `Cierre de viaje CCCM ${viaje.codigo || ''}: ${viaje.nombreReporta} — ${viaje.origen} a ${viaje.destino}`
   const cuerpo = [
     `Nombre de quien reporta: ${viaje.nombreReporta}`,
     `Origen - Destino: ${viaje.origen} - ${viaje.destino}`,
     `Hora de cierre: ${new Date(viaje.closedAt || Date.now()).toLocaleString()}`,
     '',
     'Estado: VIAJE FINALIZADO SIN NOVEDAD',
+  ].join('\n')
+  return enviarCorreo({ asunto, cuerpo, correoVariable: viaje.correoVariable })
+}
+
+export function enviarCorreoCierreTrayecto(viaje, trayecto) {
+  const asunto = `Cierre de trayecto ${trayecto.codigo || trayecto.numero} CCCM: ${viaje.nombreReporta} — ${trayecto.origen} a ${trayecto.destino}`
+  const cuerpo = [
+    `Viaje principal: ${viaje.codigo || ''} ${viaje.origen} - ${viaje.destino} (${viaje.nombreReporta})`,
+    `Trayecto ${trayecto.codigo || trayecto.numero}: ${trayecto.origen} - ${trayecto.destino}`,
+    `Hora de cierre: ${new Date(trayecto.closedAt || Date.now()).toLocaleString()}`,
+    '',
+    'Estado: TRAYECTO FINALIZADO SIN NOVEDAD',
   ].join('\n')
   return enviarCorreo({ asunto, cuerpo, correoVariable: viaje.correoVariable })
 }
