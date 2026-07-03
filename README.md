@@ -5,6 +5,16 @@ viajeros CCCM, con trayectos internos ilimitados dentro de cada viaje,
 un panel de control centralizado, y notificación automática por correo.
 Funciona sin conexión en celulares y PC (PWA instalable).
 
+## Documentación
+
+- [Manual de usuario](docs/manual-usuario.md) — cómo usar la app (check-in, trayectos, observaciones, cierre).
+- [Arquitectura](docs/arquitectura.md) — cómo está construida por dentro.
+- [Manual de implementación y configuración](docs/manual-implementacion.md) — despliegue paso a paso desde cero.
+- [Manual de operación y mantenimiento](docs/manual-operacion.md) — tareas del día a día (roles, secretos, respaldo, diagnóstico).
+
+Este README se queda con lo esencial para desarrollo local; los detalles
+de despliegue en Azure viven en los documentos de arriba.
+
 ## Arquitectura
 
 - **Frontend**: React + Vite + Tailwind, PWA instalable (`vite-plugin-pwa`).
