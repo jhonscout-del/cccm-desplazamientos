@@ -11,7 +11,11 @@ import { graphFetchDirect } from '../graph.js'
 const SITE_ID = process.env.SHAREPOINT_SITE_ID
 if (!SITE_ID) throw new Error('Falta SHAREPOINT_SITE_ID en .env')
 
-const texto = (name, opts = {}) => ({ name, text: { allowMultipleLines: false, maxLength: 255, ...opts } })
+const texto = (name, opts = {}, extra = {}) => ({
+  name,
+  text: { allowMultipleLines: false, maxLength: 255, ...opts },
+  ...extra,
+})
 const numero = (name) => ({ name, number: {} })
 
 async function crearListaSiNoExiste(displayName, columns) {
@@ -30,7 +34,9 @@ async function crearListaSiNoExiste(displayName, columns) {
 }
 
 const idViajes = await crearListaSiNoExiste('ViajesCCCM', [
-  texto('ViajeId'),
+  // Indexada: server/graph.js filtra por este campo para no duplicar el
+  // item al reintentar la sincronización de un mismo viaje.
+  texto('ViajeId', {}, { indexed: true }),
   texto('Estado', { maxLength: 20 }),
   texto('NombreReporta'),
   texto('FechaViaje', { maxLength: 20 }),
