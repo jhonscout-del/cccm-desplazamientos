@@ -91,6 +91,9 @@ Microsoft) en estos momentos:
 
 - Al iniciar el viaje (check-in).
 - Al agregar un trayecto interno.
+- **Al agregar una observación** (mientras el viaje o trayecto sigue
+  abierto) — no hace falta esperar a que se cierre para avisar de una
+  novedad.
 - Al cerrar un trayecto.
 - Al cerrar el viaje completo.
 
@@ -99,11 +102,12 @@ correo variable que escribiste al hacer el check-in. Si no hay conexión en
 el momento del evento, el correo se envía automáticamente en cuanto vuelva
 la señal — no se pierde ni hay que reenviarlo a mano.
 
-Todos los correos incluyen una sección **NOVEDADES** al final, con las
-observaciones registradas hasta ese momento (o "Sin novedades
-registradas." si no hay ninguna). En el correo de cierre, el estado
-también cambia automáticamente entre "SIN NOVEDAD" y "CON NOVEDADES"
-según si se registró alguna observación durante el viaje o trayecto.
+El correo que se envía al agregar una observación incluye una sección
+**NOVEDADES** con la nota nueva y todo el historial acumulado hasta ese
+momento (o "Sin novedades registradas." si es la primera). El correo de
+cierre no repite ese listado — solo indica si el viaje o trayecto terminó
+"SIN NOVEDAD" o "CON NOVEDADES", ya que el detalle de cada una se envió
+por separado en su momento.
 
 ## 9. Sin conexión: qué esperar
 

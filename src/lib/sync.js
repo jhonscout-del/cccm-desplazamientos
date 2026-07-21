@@ -5,6 +5,8 @@ import {
   enviarCorreoTrayecto,
   enviarCorreoCierre,
   enviarCorreoCierreTrayecto,
+  enviarCorreoObservacionViaje,
+  enviarCorreoObservacionTrayecto,
 } from './email'
 
 const nowIso = () => new Date().toISOString()
@@ -93,7 +95,7 @@ function fromApiTrayecto(row, overrides = {}) {
   }
 }
 
-function fromApiObservacion(row) {
+function fromApiObservacion(row, overrides = {}) {
   return {
     id: row.id,
     viajeId: row.viaje_id,
@@ -102,6 +104,8 @@ function fromApiObservacion(row) {
     autor: row.autor,
     createdAt: row.created_at,
     syncStatus: STATUS.SYNCED,
+    emailStatus: STATUS.SENT,
+    ...overrides,
   }
 }
 
@@ -180,6 +184,7 @@ export async function agregarObservacionLocal(viaje, texto, trayecto = null) {
     autor: null,
     createdAt: nowIso(),
     syncStatus: STATUS.PENDING,
+    emailStatus: STATUS.PENDING,
   }
   await localDb.observaciones.add(obs)
   syncNow()
@@ -284,6 +289,30 @@ export async function syncNow() {
       }
     }
 
+    // Correo inmediato por cada observación nueva (no solo al cierre):
+    // se envía una vez que la observación ya se sincronizó, con el
+    // historial completo hasta ese momento.
+    const obsNecesitanEmail = await localDb.observaciones
+      .where('syncStatus').equals(STATUS.SYNCED)
+      .and((o) => o.emailStatus === STATUS.PENDING || o.emailStatus === STATUS.ERROR)
+      .toArray()
+    for (const o of obsNecesitanEmail) {
+      const viaje = await localDb.viajes.get(o.viajeId)
+      if (!viaje) continue
+      try {
+        if (o.trayectoId) {
+          const trayecto = await localDb.trayectos.get(o.trayectoId)
+          if (!trayecto) continue
+          await enviarCorreoObservacionTrayecto(viaje, trayecto, await observacionesDe(viaje.id, trayecto.id))
+        } else {
+          await enviarCorreoObservacionViaje(viaje, await observacionesDe(viaje.id))
+        }
+        await localDb.observaciones.update(o.id, { emailStatus: STATUS.SENT })
+      } catch {
+        await localDb.observaciones.update(o.id, { emailStatus: STATUS.ERROR })
+      }
+    }
+
     const cierresPendientes = await localDb.viajes.where('closeSyncStatus').equals(STATUS.PENDING).toArray()
     for (const v of cierresPendientes) {
       try {
@@ -360,7 +389,7 @@ export async function pullMisViajes() {
     for (const orow of full.observaciones || []) {
       const localO = await localDb.observaciones.get(orow.id)
       if (localO && localO.syncStatus === STATUS.PENDING) continue
-      await localDb.observaciones.put(fromApiObservacion(orow))
+      await localDb.observaciones.put(fromApiObservacion(orow, { emailStatus: localO?.emailStatus ?? STATUS.SENT }))
     }
 
     for (const trow of full.trayectos) {
@@ -373,7 +402,7 @@ export async function pullMisViajes() {
       for (const orow of trow.observaciones || []) {
         const localO = await localDb.observaciones.get(orow.id)
         if (localO && localO.syncStatus === STATUS.PENDING) continue
-        await localDb.observaciones.put(fromApiObservacion(orow))
+        await localDb.observaciones.put(fromApiObservacion(orow, { emailStatus: localO?.emailStatus ?? STATUS.SENT }))
       }
     }
   }

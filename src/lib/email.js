@@ -106,8 +106,6 @@ export function enviarCorreoCierre(viaje, observaciones = []) {
     `Hora de cierre: ${new Date(viaje.closedAt || Date.now()).toLocaleString()}`,
     '',
     `Estado: VIAJE FINALIZADO ${observaciones.length ? 'CON NOVEDADES' : 'SIN NOVEDAD'}`,
-    '',
-    ...seccionNovedades(observaciones),
   ].join('\n')
   return enviarCorreo({ asunto, cuerpo, correoVariable: viaje.correoVariable })
 }
@@ -120,6 +118,29 @@ export function enviarCorreoCierreTrayecto(viaje, trayecto, observaciones = []) 
     `Hora de cierre: ${new Date(trayecto.closedAt || Date.now()).toLocaleString()}`,
     '',
     `Estado: TRAYECTO FINALIZADO ${observaciones.length ? 'CON NOVEDADES' : 'SIN NOVEDAD'}`,
+  ].join('\n')
+  return enviarCorreo({ asunto, cuerpo, correoVariable: viaje.correoVariable })
+}
+
+// Correo inmediato al registrar una observación (mientras el viaje o
+// trayecto sigue abierto) — incluye la novedad nueva junto con todo el
+// historial acumulado hasta el momento.
+export function enviarCorreoObservacionViaje(viaje, observaciones) {
+  const asunto = `Novedad CCCM ${viaje.codigo || ''}: ${viaje.nombreReporta} — ${viaje.origen} a ${viaje.destino}`
+  const cuerpo = [
+    `Nombre de quien reporta: ${viaje.nombreReporta}`,
+    `Origen - Destino: ${viaje.origen} - ${viaje.destino}`,
+    '',
+    ...seccionNovedades(observaciones),
+  ].join('\n')
+  return enviarCorreo({ asunto, cuerpo, correoVariable: viaje.correoVariable })
+}
+
+export function enviarCorreoObservacionTrayecto(viaje, trayecto, observaciones) {
+  const asunto = `Novedad CCCM ${trayecto.codigo || trayecto.numero}: ${viaje.nombreReporta} — ${trayecto.origen} a ${trayecto.destino}`
+  const cuerpo = [
+    `Viaje principal: ${viaje.codigo || ''} ${viaje.origen} - ${viaje.destino} (${viaje.nombreReporta})`,
+    `Trayecto ${trayecto.codigo || trayecto.numero}: ${trayecto.origen} - ${trayecto.destino}`,
     '',
     ...seccionNovedades(observaciones),
   ].join('\n')
