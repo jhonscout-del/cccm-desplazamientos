@@ -231,7 +231,7 @@ export async function syncNow() {
       .toArray()
     for (const v of necesitanEmailCheckin) {
       try {
-        await enviarCorreoCheckin(v)
+        await enviarCorreoCheckin(v, await observacionesDe(v.id))
         await localDb.viajes.update(v.id, { emailStatus: STATUS.SENT })
       } catch {
         await localDb.viajes.update(v.id, { emailStatus: STATUS.ERROR })
@@ -259,7 +259,7 @@ export async function syncNow() {
       const viaje = await localDb.viajes.get(t.viajeId)
       if (!viaje) continue
       try {
-        await enviarCorreoTrayecto(viaje, t)
+        await enviarCorreoTrayecto(viaje, t, await observacionesDe(viaje.id, t.id))
         await localDb.trayectos.update(t.id, { emailStatus: STATUS.SENT })
       } catch {
         await localDb.trayectos.update(t.id, { emailStatus: STATUS.ERROR })
@@ -300,7 +300,7 @@ export async function syncNow() {
       .toArray()
     for (const v of cierresNecesitanEmail) {
       try {
-        await enviarCorreoCierre(v)
+        await enviarCorreoCierre(v, await observacionesDe(v.id))
         await localDb.viajes.update(v.id, { closeEmailStatus: STATUS.SENT })
       } catch {
         await localDb.viajes.update(v.id, { closeEmailStatus: STATUS.ERROR })
@@ -325,7 +325,7 @@ export async function syncNow() {
       const viaje = await localDb.viajes.get(t.viajeId)
       if (!viaje) continue
       try {
-        await enviarCorreoCierreTrayecto(viaje, t)
+        await enviarCorreoCierreTrayecto(viaje, t, await observacionesDe(viaje.id, t.id))
         await localDb.trayectos.update(t.id, { closeEmailStatus: STATUS.SENT })
       } catch {
         await localDb.trayectos.update(t.id, { closeEmailStatus: STATUS.ERROR })

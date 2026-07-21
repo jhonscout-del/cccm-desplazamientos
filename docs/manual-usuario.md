@@ -40,7 +40,7 @@ y la app lo guarda en tu celular hasta que vuelva a haber conexión.
      cooperativa, nombre del arriero o guía, etc.). Si el transporte es de
      CCCM, marca la casilla correspondiente para indicar el número de
      vehículo o el nombre del conductor/motorista.
-   - **Hora tentativa de inicio** del desplazamiento.
+   - **Hora de inicio de desplazamiento**.
    - **Nombre de la persona a quien acudir** en caso de emergencia.
    - **Correo de tu jefe inmediato o coordinador** — a este correo (además
      de uno fijo del equipo de seguridad) le llegará automáticamente el
@@ -98,6 +98,12 @@ Cada correo llega tanto al correo fijo del equipo de seguridad como al
 correo variable que escribiste al hacer el check-in. Si no hay conexión en
 el momento del evento, el correo se envía automáticamente en cuanto vuelva
 la señal — no se pierde ni hay que reenviarlo a mano.
+
+Todos los correos incluyen una sección **NOVEDADES** al final, con las
+observaciones registradas hasta ese momento (o "Sin novedades
+registradas." si no hay ninguna). En el correo de cierre, el estado
+también cambia automáticamente entre "SIN NOVEDAD" y "CON NOVEDADES"
+según si se registró alguna observación durante el viaje o trayecto.
 
 ## 9. Sin conexión: qué esperar
 

@@ -72,7 +72,7 @@ export function NuevoViaje() {
           onDetalleChange={(name, value) => setTransporteDetalle((d) => ({ ...d, [name]: value }))}
         />
 
-        <Campo label="Hora tentativa de inicio del desplazamiento">
+        <Campo label="Hora de inicio de desplazamiento">
           <input type="time" required value={form.horaInicio} onChange={set('horaInicio')} className="input" />
         </Campo>
         <Campo label="Nombre de persona a quien acudir (contacto de emergencia)">
